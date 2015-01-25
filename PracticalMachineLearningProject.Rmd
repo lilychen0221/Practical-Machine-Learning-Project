@@ -1,0 +1,105 @@
+---
+title: "MachineLearningProject"
+date: "January 22, 2015"
+output: html_document
+---
+## Executive Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to barbell lifts correctly and incorrectly in different ways. 
+
+## Library
+
+```{r, eval=FALSE}
+set.seed(1234)
+library(caret); library(kernlab); library(randomForest); library(corrplot)
+```
+
+## load and clean data
+Load data and remove the columns with NA and the first eight identifier columns. There are lots of NA values that can result in a lot of noise for the model. So they can be removed from the data with the first eight columns that used as identifiers.
+
+```{r, eval=FALSE}
+data_training <- read.csv("pml-training.csv", na.strings= c("NA",""," "))
+```
+
+```{r, eval=FALSE}
+### remove the columns with NA from training data
+data_training_NA <- apply(data_training, 2, function(x){
+        sum(is.na(x))
+})
+data_training_new1 <- data_training[, which(data_training_NA == 0)]
+#### remove the comlumns of user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window
+data_training_new2 <- data_training_new1[8:length(data_training_new1)]
+```
+
+## Modeling
+ 
+In order to train the model and test it's accuracy, the testing data is split into training and cross validation set(ratio = 7:3).
+
+```{r, eval=FALSE}
+### split the cleaned testing data into training and cross validation
+### 70 percent subsample is used to train the modle, and 30 percent sample is used for cross-validation.
+inTrain <- createDataPartition(y = data_training_new2$classe, p = 0.7, list = FALSE)
+training <- data_training_new2[inTrain, ]
+crossval <- data_training_new2[-inTrain, ]
+```
+
+Created the correlation Matrix and the correlation plot in order to see which model is fitted with the data set. 
+
+```{r, eval=FALSE}
+correlMatrix <- cor(training[, -length(training)])
+correlMatrix 
+corrplot(correlMatrix, order = "FPC", method = "circle", type = "lower", tl.cex = 0.8,  tl.col = rgb(0, 0, 0))
+```
+
+In this plot, the dark red and dark blue means the highly negative and positive relationship between the varibles. And all of them should be taken into account in the model because there is not much concern for highly corrlelated predictors in the plot. So the linear regreesion model is probably not good for this data set. Boosting and random forest algorithms may be fitted in this case.
+
+### Boosting Model
+Fit model with boosting algorithm and plot accuracy of this model.
+
+```{r, eval=FALSE}
+boostFit <- train(classe ~ ., method = "gbm", data = training, verbose = FALSE)
+plot(boostFit, ylim = c(0.9, 1))
+```
+
+### Random Forest Model
+Fit model with random forests algorithm and plot accuracy of the model on the same scale as boosting model.
+
+```{r, eval=FALSE}
+rfFit <- train(classe ~ ., method = "rf", data = training, importance = T)
+plot(rfFit, ylim = c(0.9, 1))
+```
+
+By comparing the two models, boost model and random forest model, random forest has overall better accuracy and it is fitted well with the data set.  The random forest model's accuracy is very high (close to 1). So I choose random forest as the final model to do cross-validation and predicton.
+
+## Cross-validation
+Use random forest model to classify the ramining 30% of training data. 
+
+```{r, eval=FALSE}
+predictCrossVal <- predict(rfFit, crossval)
+confusionMatrix(crossval$classe, predictCrossVal)
+```
+
+The accuracy is 0.9939, so it's also proven that the random forest model is well fitted with the data set and it's robust to predict new data.
+
+## Prediction
+Load and clean the testing data.
+
+```{r, eval=FALSE}
+### read the csv file for testing
+data_testing <- read.csv("pml-testing.csv", na.strings= c("NA",""," "))
+
+### clean testing data by removing columns with NA and the first 8 identifier cloumns
+data_testing_NA <- apply(data_testing, 2, function(x){sum(is.na(x))})
+data_testing_new1 <- data_testing[, which(data_testing_NA == 0)]
+testing <- data_testing_new1[8:length(data_testing_new1)]
+```
+
+Then use random forest model to predict the testing set and output result.
+
+```{r, eval=FALSE}
+### predict the classes of the testing data
+prediction <- predict(rfFit, testing)
+prediction
+```
+
+
